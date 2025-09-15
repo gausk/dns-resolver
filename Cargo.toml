@@ -1,0 +1,8 @@
+[package]
+name = "dns-resolver"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+num_enum = "0.7.4"
+rand = "0.9.2"

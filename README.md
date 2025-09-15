@@ -1,2 +1,2 @@
-# dns-resolver
-DNS resolver as a weekend roject
+# DNS Resolver
+DNS resolver as a weekend project
