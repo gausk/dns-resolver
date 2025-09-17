@@ -306,7 +306,7 @@ impl DNSResolver {
 
     fn build_query(domain_name: &str, record_type: RecordType, class: Class) -> Vec<u8> {
         let encoded_name = Self::encode_dns_name(domain_name);
-        let header = DNSHeader::new(1 << 8, 1).to_bytes();
+        let header = DNSHeader::new(0, 1).to_bytes();
         let questions =
             DNSQuestion::new(String::from_utf8(encoded_name).unwrap(), record_type, class)
                 .to_bytes();
