@@ -379,7 +379,7 @@ mod tests {
         // validate after the random id
         assert_eq!(
             &DNSResolver::build_query("example.com", RecordType::A, Class::In)[2..],
-            b"\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x07example\x03com\x00\x00\x01\x00\x01"
+            b"\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x07example\x03com\x00\x00\x01\x00\x01"
         );
     }
 
