@@ -1,5 +1,6 @@
 use dns_resolver::DNSResolver;
 use std::env;
+use std::net::Ipv4Addr;
 
 fn main() {
     let resolver = DNSResolver::new("198.41.0.4");
@@ -24,4 +25,8 @@ fn main() {
             Err(e) => eprintln!("\nFailed to resolve {domain}: {e}\n"),
         }
     }
+    let reverse_domain = resolver
+        .reverse_resolve(&Ipv4Addr::new(8, 8, 8, 8))
+        .unwrap();
+    println!("\nDomain for ip 8.8.8.8 is {reverse_domain}\n");
 }

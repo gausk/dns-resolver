@@ -59,6 +59,8 @@ enum RecordType {
     Md = 3,
     Mf = 4,
     Cname = 5,
+    Soa = 6,
+    Ptr = 12,
     Aaaa = 28,
 }
 
@@ -179,7 +181,7 @@ impl DNSRecord {
                 cursor += 4;
                 DNSRecordData::Ipv4Addr(ip)
             }
-            RecordType::Ns | RecordType::Cname => {
+            RecordType::Ns | RecordType::Cname | RecordType::Ptr => {
                 let (name, len) = decode_name(buf, cursor);
                 cursor += len;
                 DNSRecordData::Name(name)
@@ -214,7 +216,7 @@ pub struct DNSPacket {
 }
 
 impl DNSPacket {
-    pub fn parse(buf: &[u8]) -> Result<Self> {
+    fn parse(buf: &[u8]) -> Result<Self> {
         let header = DNSHeader::parse(buf)?;
         const DNS_HEADER_LEN: usize = 12;
         let mut cursor = DNS_HEADER_LEN;
@@ -272,8 +274,17 @@ impl DNSPacket {
         None
     }
 
-    pub fn get_nameserver(&self) -> Option<&str> {
+    fn get_nameserver(&self) -> Option<&str> {
         for record in &self.authorities {
+            if let DNSRecordData::Name(name) = &record.data {
+                return Some(name.as_str());
+            }
+        }
+        None
+    }
+
+    fn get_ptr_answer(&self) -> Option<&str> {
+        for record in &self.answers {
             if let DNSRecordData::Name(name) = &record.data {
                 return Some(name.as_str());
             }
@@ -313,9 +324,9 @@ impl DNSResolver {
         [header, questions].concat()
     }
 
-    fn lookup(domain_name: &str, ip_addr: &Ipv4Addr) -> Result<DNSPacket> {
+    fn lookup(domain_name: &str, ip_addr: &Ipv4Addr, record_type: RecordType) -> Result<DNSPacket> {
         println!("Querying {ip_addr} for {domain_name}");
-        let query = Self::build_query(domain_name, RecordType::A, Class::In);
+        let query = Self::build_query(domain_name, record_type, Class::In);
         let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).unwrap();
         socket.set_read_timeout(Some(Duration::from_secs(3)))?;
         socket.set_write_timeout(Some(Duration::from_secs(3)))?;
@@ -329,7 +340,7 @@ impl DNSResolver {
     pub fn resolve(&self, domain_name: &str) -> Result<Ipv4Addr> {
         let mut ip_addr = self.id_addr;
         loop {
-            let dns_packet = Self::lookup(domain_name, &ip_addr)?;
+            let dns_packet = Self::lookup(domain_name, &ip_addr, RecordType::A)?;
             if let Some(ip) = dns_packet.get_answer() {
                 return Ok(ip);
             } else if let Some(ns_ip) = dns_packet.get_nameserver_ip() {
@@ -337,7 +348,28 @@ impl DNSResolver {
             } else if let Some(name) = dns_packet.get_nameserver() {
                 ip_addr = self.resolve(name)?;
             } else {
-                anyhow::bail!("Could not resolve DNS packet");
+                anyhow::bail!("Could not resolve DNS domain name");
+            }
+        }
+    }
+
+    pub fn reverse_resolve(&self, ip_addr: &Ipv4Addr) -> Result<String> {
+        let mut ns_ip_addr = self.id_addr;
+        let ip_addr = ip_addr.octets();
+        let ip_domain = format!(
+            "{}.{}.{}.{}.in-addr.arpa",
+            ip_addr[3], ip_addr[2], ip_addr[1], ip_addr[0]
+        );
+        loop {
+            let dns_packet = Self::lookup(&ip_domain, &ns_ip_addr, RecordType::Ptr)?;
+            if let Some(domain) = dns_packet.get_ptr_answer() {
+                return Ok(domain.to_string());
+            } else if let Some(ns_ip) = dns_packet.get_nameserver_ip() {
+                ns_ip_addr = ns_ip;
+            } else if let Some(name) = dns_packet.get_nameserver() {
+                ns_ip_addr = self.resolve(name)?;
+            } else {
+                anyhow::bail!("Could not reverse resolve the ip addr");
             }
         }
     }
