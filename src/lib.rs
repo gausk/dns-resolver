@@ -1,8 +1,14 @@
+mod cache;
+pub mod server;
+
+use crate::cache::{DOMAIN_TO_IP_CACHE, IP_TO_DOMAIN_CACHE};
 use anyhow::Result;
 use num_enum::TryFromPrimitive;
 use rand::random;
-use std::net::{Ipv4Addr, UdpSocket};
-use std::time::Duration;
+use std::net::Ipv4Addr;
+use tokio::net::UdpSocket;
+use tokio::time::{Duration, timeout};
+use tracing::info;
 
 #[derive(Debug, Clone)]
 struct DNSHeader {
@@ -298,6 +304,12 @@ pub struct DNSResolver {
     id_addr: Ipv4Addr,
 }
 
+impl Default for DNSResolver {
+    fn default() -> Self {
+        DNSResolver::new("198.41.0.4")
+    }
+}
+
 impl DNSResolver {
     pub fn new(id_addr: &str) -> Self {
         DNSResolver {
@@ -324,50 +336,67 @@ impl DNSResolver {
         [header, questions].concat()
     }
 
-    fn lookup(domain_name: &str, ip_addr: &Ipv4Addr, record_type: RecordType) -> Result<DNSPacket> {
-        println!("Querying {ip_addr} for {domain_name}");
+    async fn lookup(
+        domain_name: &str,
+        ip_addr: &Ipv4Addr,
+        record_type: RecordType,
+    ) -> Result<DNSPacket> {
+        info!("Querying {ip_addr} for {domain_name}");
         let query = Self::build_query(domain_name, record_type, Class::In);
-        let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).unwrap();
-        socket.set_read_timeout(Some(Duration::from_secs(3)))?;
-        socket.set_write_timeout(Some(Duration::from_secs(3)))?;
-        socket.send_to(&query, (*ip_addr, 53))?;
+        let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await?;
+        socket.send_to(&query, (*ip_addr, 53)).await?;
 
         let mut buf = [0; 1024];
-        let (size, _src) = socket.recv_from(&mut buf)?;
+        let recv_result = timeout(Duration::from_secs(5), socket.recv_from(&mut buf)).await;
+        let size = match recv_result {
+            Ok(Ok((size, _src))) => size,
+            Ok(Err(e)) => return Err(e.into()),
+            Err(_) => return Err(anyhow::anyhow!("Timed out waiting for response")),
+        };
         DNSPacket::parse(&buf[..size])
     }
 
-    pub fn resolve(&self, domain_name: &str) -> Result<Ipv4Addr> {
+    pub async fn resolve(&self, domain_name: &str) -> Result<Ipv4Addr> {
+        if let Some(ip) = DOMAIN_TO_IP_CACHE.get(domain_name).await {
+            return Ok(ip);
+        }
         let mut ip_addr = self.id_addr;
         loop {
-            let dns_packet = Self::lookup(domain_name, &ip_addr, RecordType::A)?;
+            let dns_packet = Self::lookup(domain_name, &ip_addr, RecordType::A).await?;
             if let Some(ip) = dns_packet.get_answer() {
+                DOMAIN_TO_IP_CACHE.insert(domain_name.to_string(), ip).await;
                 return Ok(ip);
             } else if let Some(ns_ip) = dns_packet.get_nameserver_ip() {
                 ip_addr = ns_ip;
             } else if let Some(name) = dns_packet.get_nameserver() {
-                ip_addr = self.resolve(name)?;
+                ip_addr = Box::pin(self.resolve(name)).await?;
             } else {
                 anyhow::bail!("Could not resolve DNS domain name");
             }
         }
     }
 
-    pub fn reverse_resolve(&self, ip_addr: &Ipv4Addr) -> Result<String> {
+    pub async fn reverse_resolve(&self, req_ip_addr: &Ipv4Addr) -> Result<String> {
+        if let Some(domain) = IP_TO_DOMAIN_CACHE.get(req_ip_addr).await {
+            return Ok(domain);
+        }
         let mut ns_ip_addr = self.id_addr;
-        let ip_addr = ip_addr.octets();
+        let ip_addr = req_ip_addr.octets();
         let ip_domain = format!(
             "{}.{}.{}.{}.in-addr.arpa",
             ip_addr[3], ip_addr[2], ip_addr[1], ip_addr[0]
         );
         loop {
-            let dns_packet = Self::lookup(&ip_domain, &ns_ip_addr, RecordType::Ptr)?;
+            let dns_packet = Self::lookup(&ip_domain, &ns_ip_addr, RecordType::Ptr).await?;
             if let Some(domain) = dns_packet.get_ptr_answer() {
+                IP_TO_DOMAIN_CACHE
+                    .insert(*req_ip_addr, domain.to_string())
+                    .await;
                 return Ok(domain.to_string());
             } else if let Some(ns_ip) = dns_packet.get_nameserver_ip() {
                 ns_ip_addr = ns_ip;
             } else if let Some(name) = dns_packet.get_nameserver() {
-                ns_ip_addr = self.resolve(name)?;
+                ns_ip_addr = self.resolve(name).await?;
             } else {
                 anyhow::bail!("Could not reverse resolve the ip addr");
             }

@@ -1,32 +1,20 @@
-use dns_resolver::DNSResolver;
-use std::env;
-use std::net::Ipv4Addr;
+use axum::routing::get;
+use axum::{Router, serve};
+use dns_resolver::server::{resolve_dns, resolve_ip};
+use tokio::net::TcpListener;
+use tracing::Level;
+use tracing_subscriber::FmtSubscriber;
 
-fn main() {
-    let resolver = DNSResolver::new("198.41.0.4");
+#[tokio::main]
+async fn main() {
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::TRACE)
+        .finish();
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
-    let args: Vec<String> = env::args().skip(1).collect();
-    let domains = if args.is_empty() {
-        vec![
-            "example.com".to_string(),
-            "twitter.com".to_string(),
-            "facebook.com".to_string(),
-            "google.com".to_string(),
-            "recurse.com".to_string(),
-            "metafilter.com".to_string(),
-        ]
-    } else {
-        args
-    };
-
-    for domain in domains.iter() {
-        match resolver.resolve(domain) {
-            Ok(ip) => println!("\nIp for {domain} is {ip}\n"),
-            Err(e) => eprintln!("\nFailed to resolve {domain}: {e}\n"),
-        }
-    }
-    let reverse_domain = resolver
-        .reverse_resolve(&Ipv4Addr::new(8, 8, 8, 8))
-        .unwrap();
-    println!("\nDomain for ip 8.8.8.8 is {reverse_domain}\n");
+    let app = Router::new()
+        .route("/resolve", get(resolve_dns))
+        .route("/reverse_resolve", get(resolve_ip));
+    let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    serve(listener, app).await.unwrap();
 }

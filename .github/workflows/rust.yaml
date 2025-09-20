@@ -24,5 +24,5 @@ jobs:
         run: cargo build --verbose --release
       - name: Run tests
         run: cargo test --verbose --release
-      - name: Run
-        run: cargo run  --release
+      - name: Run example
+        run: cargo run --release --example resolve
