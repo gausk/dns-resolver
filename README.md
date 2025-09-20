@@ -40,7 +40,7 @@ cargo run --release
 ```
 
 The server runs on `http://localhost:3000` and provides:
-- **Web Interface**: Modern UI at `http://localhost:3000/`
+- **Web Interface**: UI at `http://localhost:3000/`
 - **REST API**: Programmatic access via endpoints below
 
 #### API Endpoints
