@@ -1,7 +1,11 @@
 use axum::routing::get;
 use axum::{Router, serve};
+use axum::http::Method;
 use dns_resolver::server::{resolve_dns, resolve_ip};
 use tokio::net::TcpListener;
+use tower::ServiceBuilder;
+use tower_http::cors::{CorsLayer, Any};
+use tower_http::services::ServeDir;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
@@ -12,9 +16,17 @@ async fn main() {
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
+    let cors = CorsLayer::new()
+        .allow_methods([Method::GET])
+        .allow_origin(Any);
+
     let app = Router::new()
         .route("/resolve", get(resolve_dns))
-        .route("/reverse_resolve", get(resolve_ip));
+        .route("/reverse_resolve", get(resolve_ip))
+        .nest_service("/", ServeDir::new("static"))
+        .layer(ServiceBuilder::new().layer(cors));
+
     let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    println!("DNS Resolver server running on http://localhost:3000");
     serve(listener, app).await.unwrap();
 }
