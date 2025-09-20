@@ -262,10 +262,19 @@ impl DNSPacket {
         })
     }
 
-    fn get_answer(&self) -> Option<Ipv4Addr> {
+    fn get_answer_ip(&self) -> Option<Ipv4Addr> {
         for answer in &self.answers {
             if let DNSRecordData::Ipv4Addr(name) = answer.data {
                 return Some(name);
+            }
+        }
+        None
+    }
+
+    fn get_answer_domain(&self) -> Option<&str> {
+        for answer in &self.answers {
+            if let DNSRecordData::Name(name) = &answer.data {
+                return Some(name.as_str());
             }
         }
         None
@@ -280,17 +289,8 @@ impl DNSPacket {
         None
     }
 
-    fn get_nameserver(&self) -> Option<&str> {
+    fn get_nameserver_domain(&self) -> Option<&str> {
         for record in &self.authorities {
-            if let DNSRecordData::Name(name) = &record.data {
-                return Some(name.as_str());
-            }
-        }
-        None
-    }
-
-    fn get_ptr_answer(&self) -> Option<&str> {
-        for record in &self.answers {
             if let DNSRecordData::Name(name) = &record.data {
                 return Some(name.as_str());
             }
@@ -363,12 +363,14 @@ impl DNSResolver {
         let mut ip_addr = self.id_addr;
         loop {
             let dns_packet = Self::lookup(domain_name, &ip_addr, RecordType::A).await?;
-            if let Some(ip) = dns_packet.get_answer() {
+            if let Some(ip) = dns_packet.get_answer_ip() {
                 DOMAIN_TO_IP_CACHE.insert(domain_name.to_string(), ip).await;
                 return Ok(ip);
+            } else if let Some(name) = dns_packet.get_answer_domain() {
+                return Box::pin(self.resolve(name)).await;
             } else if let Some(ns_ip) = dns_packet.get_nameserver_ip() {
                 ip_addr = ns_ip;
-            } else if let Some(name) = dns_packet.get_nameserver() {
+            } else if let Some(name) = dns_packet.get_nameserver_domain() {
                 ip_addr = Box::pin(self.resolve(name)).await?;
             } else {
                 anyhow::bail!("Could not resolve DNS domain name");
@@ -388,14 +390,14 @@ impl DNSResolver {
         );
         loop {
             let dns_packet = Self::lookup(&ip_domain, &ns_ip_addr, RecordType::Ptr).await?;
-            if let Some(domain) = dns_packet.get_ptr_answer() {
+            if let Some(domain) = dns_packet.get_answer_domain() {
                 IP_TO_DOMAIN_CACHE
                     .insert(*req_ip_addr, domain.to_string())
                     .await;
                 return Ok(domain.to_string());
             } else if let Some(ns_ip) = dns_packet.get_nameserver_ip() {
                 ns_ip_addr = ns_ip;
-            } else if let Some(name) = dns_packet.get_nameserver() {
+            } else if let Some(name) = dns_packet.get_nameserver_domain() {
                 ns_ip_addr = self.resolve(name).await?;
             } else {
                 anyhow::bail!("Could not reverse resolve the ip addr");
