@@ -1,4 +1,4 @@
-use dns_resolver::DNSResolver;
+use dns_resolver_rs::DNSResolver;
 use std::env;
 use std::net::Ipv4Addr;
 use tracing::Level;

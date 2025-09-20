@@ -1,7 +1,18 @@
 [package]
-name = "dns-resolver"
+name = "dns-resolver-rs"
 version = "0.1.0"
 edition = "2024"
+
+authors = ["Gaurav Kumar <gauravsingh12341@gmail.com>"]
+description = "A simple DNS resolver server built with Axum and Tokio"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/gausk/dns-resolver"
+homepage = "https://github.com/gausk/dns-resolver"
+documentation = "https://docs.rs/dns-resolver"
+readme = "README.md"
+keywords = ["dns", "resolver", "axum", "tokio"]
+categories = ["network-programming", "asynchronous"]
+
 
 [dependencies]
 anyhow = "1.0.99"

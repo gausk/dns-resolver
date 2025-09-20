@@ -1,7 +1,7 @@
 use axum::http::Method;
 use axum::routing::get;
 use axum::{Router, serve};
-use dns_resolver::server::{resolve_dns, resolve_ip};
+use dns_resolver_rs::server::{resolve_dns, resolve_ip};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
