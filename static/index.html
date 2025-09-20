@@ -1,1 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DNS Resolver</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            text-align: center;
+            padding: 30px 20px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .resolver-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border-left: 4px solid #4facfe;
+        }
+
+        .resolver-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #4facfe;
+        }
+
+        button {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+        }
+
+        .result.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .result.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .result.loading {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4facfe;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #6c757d;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .examples {
+            margin-top: 15px;
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+
+        .examples span {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-right: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .examples span:hover {
+            background: #dee2e6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 DNS Resolver</h1>
+            <p>Resolve domain names to IP addresses and vice versa</p>
+        </div>
+
+        <div class="content">
+            <!-- Forward DNS Resolution -->
+            <div class="resolver-section">
+                <h2>🔍 Forward DNS Lookup</h2>
+                <p style="margin-bottom: 15px; color: #6c757d;">Enter a domain name to resolve to an IP address</p>
+                <div class="input-group">
+                    <input type="text" id="domainInput" placeholder="Enter domain name (e.g., google.com)" />
+                    <button onclick="resolveDomain()" id="resolveBtn">Resolve</button>
+                </div>
+                <div class="examples">
+                    <strong>Examples:</strong>
+                    <span onclick="setDomainExample('google.com')">google.com</span>
+                    <span onclick="setDomainExample('github.com')">github.com</span>
+                    <span onclick="setDomainExample('rust-lang.org')">rust-lang.org</span>
+                    <span onclick="setDomainExample('stackoverflow.com')">stackoverflow.com</span>
+                </div>
+                <div id="domainResult" class="result" style="display: none;"></div>
+            </div>
+
+            <!-- Reverse DNS Resolution -->
+            <div class="resolver-section">
+                <h2>🔄 Reverse DNS Lookup</h2>
+                <p style="margin-bottom: 15px; color: #6c757d;">Enter an IP address to resolve to a domain name</p>
+                <div class="input-group">
+                    <input type="text" id="ipInput" placeholder="Enter IP address (e.g., 8.8.8.8)" />
+                    <button onclick="resolveIP()" id="reverseBtn">Resolve</button>
+                </div>
+                <div class="examples">
+                    <strong>Examples:</strong>
+                    <span onclick="setIPExample('8.8.8.8')">8.8.8.8</span>
+                    <span onclick="setIPExample('1.1.1.1')">1.1.1.1</span>
+                    <span onclick="setIPExample('208.67.222.222')">208.67.222.222</span>
+                    <span onclick="setIPExample('9.9.9.9')">9.9.9.9</span>
+                </div>
+                <div id="ipResult" class="result" style="display: none;"></div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>DNS Resolver built with Rust and Axum 🦀</p>
+            <p style="margin-top: 5px; font-size: 0.9em;">Recursive DNS resolution starting from root servers</p>
+            <p style="margin-top: 8px; font-size: 0.85em; color: #999;">Created by Gaurav Kumar</p>
+        </div>
+    </div>
+
+    <script>
+        async function resolveDomain() {
+            const domain = document.getElementById('domainInput').value.trim();
+            const resultDiv = document.getElementById('domainResult');
+            const button = document.getElementById('resolveBtn');
+
+            if (!domain) {
+                showResult(resultDiv, 'Please enter a domain name', 'error');
+                return;
+            }
+
+            // Basic domain validation
+            if (!/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(domain)) {
+                showResult(resultDiv, 'Please enter a valid domain name', 'error');
+                return;
+            }
+
+            button.disabled = true;
+            showResult(resultDiv, '<span class="loading-spinner"></span>Resolving domain...', 'loading');
+
+            try {
+                const response = await fetch(`/resolve?domain=${encodeURIComponent(domain)}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.ip) {
+                        showResult(resultDiv, `${domain} → ${data.ip}`, 'success');
+                    } else {
+                        showResult(resultDiv, `No IP address found for ${domain}`, 'error');
+                    }
+                } else {
+                    try {
+                        const errorData = await response.json();
+                        showResult(resultDiv, errorData, 'error');
+                    } catch {
+                        const errorText = await response.text();
+                        showResult(resultDiv, errorText || `Failed to resolve ${domain}`, 'error');
+                    }
+                }
+            } catch (error) {
+                showResult(resultDiv, `Network error: ${error.message}`, 'error');
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        async function resolveIP() {
+            const ip = document.getElementById('ipInput').value.trim();
+            const resultDiv = document.getElementById('ipResult');
+            const button = document.getElementById('reverseBtn');
+
+            if (!ip) {
+                showResult(resultDiv, 'Please enter an IP address', 'error');
+                return;
+            }
+
+            // Basic IP validation
+            if (!/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(ip)) {
+                showResult(resultDiv, 'Please enter a valid IPv4 address', 'error');
+                return;
+            }
+
+            button.disabled = true;
+            showResult(resultDiv, '<span class="loading-spinner"></span>Resolving IP address...', 'loading');
+
+            try {
+                const response = await fetch(`/reverse_resolve?ip=${encodeURIComponent(ip)}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.domain) {
+                        showResult(resultDiv, `${ip} → ${data.domain}`, 'success');
+                    } else {
+                        showResult(resultDiv, `No domain found for ${ip}`, 'error');
+                    }
+                } else {
+                    try {
+                        const errorData = await response.json();
+                        showResult(resultDiv, errorData, 'error');
+                    } catch {
+                        const errorText = await response.text();
+                        showResult(resultDiv, errorText || `Failed to resolve ${ip}`, 'error');
+                    }
+                }
+            } catch (error) {
+                showResult(resultDiv, `Network error: ${error.message}`, 'error');
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        function showResult(element, message, type) {
+            element.innerHTML = message;
+            element.className = `result ${type}`;
+            element.style.display = 'flex';
+        }
+
+        function setDomainExample(domain) {
+            document.getElementById('domainInput').value = domain;
+        }
+
+        function setIPExample(ip) {
+            document.getElementById('ipInput').value = ip;
+        }
+
+        // Handle Enter key press
+        document.getElementById('domainInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') resolveDomain();
+        });
+
+        document.getElementById('ipInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') resolveIP();
+        });
+
+        // Auto-focus first input on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('domainInput').focus();
+        });
+    </script>
+</body>
+</html>
